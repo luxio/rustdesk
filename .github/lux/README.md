@@ -79,7 +79,14 @@ löschen — sie sind Zugang zu deinem Entwicklerkonto.
 
 ## Bauen
 
-*Actions → lux macOS-Client → Run workflow*, Branch `lux-1.4.9`.
+*Actions → lux macOS-Client → Run workflow*.
+
+`lux-1.4.9` ist der Default-Branch dieses Forks. Das muss so bleiben:
+GitHub blendet `workflow_dispatch` nur ein, wenn die Workflow-Datei im
+Default-Branch liegt. Alle geerbten Upstream-Workflows sind deaktiviert —
+sonst würde der geerbte Nightly-Cron einen kompletten Multi-Plattform-Build
+auslösen. Aktiv sind nur *lux macOS-Client* und *Build flutter-rust-bridge*,
+letzterer wird vom Build aufgerufen.
 
 Läuft rund eine Stunde (vcpkg baut ffmpeg, aom, libvpx; ab dem zweiten Lauf
 greift der Cache). Ergebnis sind zwei Artefakte:
@@ -103,6 +110,8 @@ git checkout -b lux-<neue-version> <neue-version>
 git checkout lux-1.4.9 -- .github/workflows/lux-macos.yml .github/lux/
 # VERSION im Workflow anpassen, ebenso die Toolchain-Pins aus dem neuen
 # flutter-build.yml (MAC_RUST_VERSION, FLUTTER_VERSION, VCPKG_COMMIT_ID)
+git push fork lux-<neue-version>
+gh api -X PATCH repos/luxio/rustdesk -f default_branch=lux-<neue-version>
 ```
 
 Der Patch-Schritt sagt beim Build von selbst Bescheid, falls Upstream die
