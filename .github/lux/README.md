@@ -102,6 +102,37 @@ Beide auf den Server legen und in `web/site/index.html` verlinken:
 scp rustdesk-lux-1.4.9-*.dmg deploy@docker1.lux.io:/opt/docker/support/site/downloads/
 ```
 
+## Lokal bauen statt auf CI
+
+`./.github/lux/build-local.sh` führt dieselben Schritte auf diesem Rechner aus.
+Der Punkt dabei: Zertifikat und Notarisierungsschlüssel bleiben im Schlüsselbund
+und müssen nicht als Secret zu GitHub. Findet das Skript eine
+`Developer ID Application`-Identität, signiert es von selbst.
+
+```bash
+./.github/lux/build-local.sh              # signiert, wenn eine Developer-ID da ist
+./.github/lux/build-local.sh --no-sign    # unsigniert, zum Ausprobieren
+./.github/lux/build-local.sh --notarize <profil>
+```
+
+Für `--notarize` einmalig ein notarytool-Profil im Schlüsselbund anlegen:
+
+```bash
+xcrun notarytool store-credentials <profil> \
+  --apple-id <mail> --team-id <team> --password <app-spezifisches-passwort>
+```
+
+Voraussetzungen: Xcode Command Line Tools, Homebrew, rustup. Das Flutter-SDK
+lädt das Skript sich selbst nach `.lux-build/` (rund 1,5 GB, einmalig) — deine
+Systeminstallation von Flutter bleibt unangetastet, denn der Build patcht das
+SDK an zwei Stellen, und das soll dir nicht im Alltag hängenbleiben. Ebenso
+vcpkg. `.lux-build/` kann danach gelöscht werden.
+
+Das Skript verlangt ein sauberes Arbeitsverzeichnis und nimmt alle Baupatches
+(Serverkonfiguration, Deployment-Target, pubspec) am Ende wieder zurück — auch
+wenn es unterwegs abbricht. Zum Schluss prüft es, ob die Serveradresse
+tatsächlich im Binary steht.
+
 ## Auf ein neues Upstream-Release nachziehen
 
 ```bash
