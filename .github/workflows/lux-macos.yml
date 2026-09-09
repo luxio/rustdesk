@@ -208,6 +208,10 @@ jobs:
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-lux-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
+      # Die Secret-Werte werden wörtlich in dieses Skript eingesetzt — deshalb
+      # überall in Anführungszeichen. Die Identität enthält Leerzeichen und
+      # Klammern, unquoted ist das ein bash-Syntaxfehler. Upstream steht hier
+      # ohne Quotes, weil dort der Hex-Fingerabdruck statt des Namens gesetzt wird.
       - name: Signieren und DMG bauen
         if: env.MACOS_P12_BASE64 != null
         run: |
@@ -215,12 +219,12 @@ jobs:
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           security default-keychain -s rustdesk.keychain
-          security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} rustdesk.keychain
+          security unlock-keychain -p "${{ secrets.MACOS_P12_PASSWORD }}" rustdesk.keychain
           rm -rf *.dmg || true
           DMG="rustdesk-lux-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg"
-          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
+          codesign --force --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 "$DMG" ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict "$DMG" -vvv
+          codesign --force --options runtime -s "${{ secrets.MACOS_CODESIGN_IDENTITY }}" --deep --strict "$DMG" -vvv
 
       # notarytool statt rcodesign: liegt auf dem Runner ohnehin bei (Xcode CLT)
       # und kommt mit einem app-spezifischen Passwort aus, statt einen
