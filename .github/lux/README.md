@@ -52,7 +52,19 @@ Verteilung außerhalb des App Store.
 Schlüsselbundverwaltung öffnen, unter *Meine Zertifikate* die Developer-ID
 aufklappen (das Dreieck — der private Schlüssel muss mit exportiert werden),
 Rechtsklick → *Exportieren* → Format „Persönlicher Informationsaustausch
-(.p12)", Passwort vergeben. Dann:
+(.p12)", Passwort vergeben.
+
+**Auf das richtige Zertifikat achten.** Dort stehen meist mehrere:
+
+```
+Apple Development: … (T5NAVS46YU)        <- zum Entwickeln, NICHT verwenden
+Developer ID Application: … (24B9N35YSF) <- dieses hier
+```
+
+Nur „Developer ID Application" taugt zur Verteilung außerhalb des App Store;
+mit „Apple Development" akzeptiert Gatekeeper die App nicht und Apple
+notarisiert sie nicht. Der Build prüft das inzwischen gleich zu Beginn und
+bricht mit einer entsprechenden Meldung ab. Dann:
 
 ```bash
 base64 -i DeveloperID.p12 | pbcopy
