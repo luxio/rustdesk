@@ -9,9 +9,15 @@
 #   MACOS_P12_BASE64        Developer-ID-Zertifikat samt privatem Schlüssel als .p12, base64
 #   MACOS_P12_PASSWORD      Passwort dieses .p12
 #   MACOS_CODESIGN_IDENTITY z.B. "Developer ID Application: Stephane Lux (24B9N35YSF)"
-#   MACOS_NOTARIZE_JSON     App-Store-Connect-API-Key im rcodesign-Format, base64
+# Für die Notarisierung zusätzlich:
+#   MACOS_NOTARY_APPLE_ID   Apple-ID (E-Mail)
+#   MACOS_NOTARY_TEAM_ID    Team-ID, z.B. 24B9N35YSF
+#   MACOS_NOTARY_PASSWORD   app-spezifisches Passwort von appleid.apple.com
+#
 # Fehlt MACOS_P12_BASE64, läuft der Build durch und liefert ein unsigniertes DMG —
-# brauchbar zum Testen, aber Gatekeeper blockt es beim Kunden.
+# brauchbar zum Testen, aber Gatekeeper blockt es beim Kunden. Fehlt nur
+# MACOS_NOTARY_PASSWORD, wird signiert aber nicht notarisiert; Gatekeeper zeigt
+# dann beim ersten Start eine Warnung, die der Kunde wegklicken müsste.
 #
 # Siehe .github/lux/README.md für die Einrichtung der Secrets.
 
@@ -34,6 +40,9 @@ env:
   LUX_RS_PUB_KEY: "IizurzL8I8eHrbgyIcEdyYvSvXwLwbsut4y9l12+sWQ="
 
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+  # Auf Workflow-Ebene, weil `env:` eines Schritts im `if:` desselben Schritts
+  # nicht sichtbar ist — die Bedingung wäre sonst immer falsch.
+  MACOS_NOTARY_PASSWORD: "${{ secrets.MACOS_NOTARY_PASSWORD }}"
 
 jobs:
   generate-bridge:
@@ -91,24 +100,6 @@ jobs:
         run: |
           security default-keychain -s rustdesk.keychain
           security find-identity -v
-
-      - name: Import notarize key
-        if: env.MACOS_P12_BASE64 != null
-        uses: timheuer/base64-to-file@adaa40c0c581f276132199d4cf60afa07ce60eac # v1.2
-        with:
-          fileName: rustdesk.json
-          fileDir: ${{ github.workspace }}
-          encodedString: ${{ secrets.MACOS_NOTARIZE_JSON }}
-
-      - name: Install rcodesign tool
-        if: env.MACOS_P12_BASE64 != null
-        shell: bash
-        run: |
-          pushd /tmp
-          wget https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.22.0/apple-codesign-0.22.0-macos-universal.tar.gz
-          tar -zxvf apple-codesign-0.22.0-macos-universal.tar.gz
-          mv apple-codesign-0.22.0-macos-universal/rcodesign /usr/local/bin
-          popd
 
       - name: Install build runtime
         run: |
@@ -217,7 +208,7 @@ jobs:
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-lux-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
-      - name: Signieren, DMG bauen, notarisieren
+      - name: Signieren und DMG bauen
         if: env.MACOS_P12_BASE64 != null
         run: |
           CREATE_DMG="$(command -v create-dmg)"
@@ -230,7 +221,21 @@ jobs:
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 "$DMG" ./flutter/build/macos/Build/Products/Release/RustDesk.app
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict "$DMG" -vvv
-          rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json --staple "$DMG"
+
+      # notarytool statt rcodesign: liegt auf dem Runner ohnehin bei (Xcode CLT)
+      # und kommt mit einem app-spezifischen Passwort aus, statt einen
+      # App-Store-Connect-API-Key zu verlangen.
+      - name: Notarisieren
+        if: env.MACOS_P12_BASE64 != null && env.MACOS_NOTARY_PASSWORD != null
+        run: |
+          DMG="rustdesk-lux-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg"
+          xcrun notarytool submit "$DMG" \
+            --apple-id "${{ secrets.MACOS_NOTARY_APPLE_ID }}" \
+            --team-id "${{ secrets.MACOS_NOTARY_TEAM_ID }}" \
+            --password "${{ secrets.MACOS_NOTARY_PASSWORD }}" \
+            --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
 
       - name: Gegenprobe der Signatur
         if: env.MACOS_P12_BASE64 != null

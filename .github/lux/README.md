@@ -61,21 +61,46 @@ base64 -i DeveloperID.p12 | pbcopy
 Der Inhalt der Zwischenablage ist `MACOS_P12_BASE64`, das vergebene Passwort
 ist `MACOS_P12_PASSWORD`.
 
-### MACOS_NOTARIZE_JSON
+### MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, MACOS_NOTARY_PASSWORD
 
-Braucht einen App-Store-Connect-API-Key: appstoreconnect.apple.com →
-*Users and Access* → *Integrations* → *App Store Connect API* → Key erzeugen
-(Rolle *Developer* genügt). Die `.p8`-Datei lässt sich nur einmal laden. Issuer
-ID und Key ID stehen auf derselben Seite.
+Für die Notarisierung. `MACOS_NOTARY_APPLE_ID` ist die Apple-ID (E-Mail),
+`MACOS_NOTARY_TEAM_ID` die Team-ID aus der Klammer der Signatur-Identität
+(z. B. `24B9N35YSF`).
+
+`MACOS_NOTARY_PASSWORD` ist ein **app-spezifisches Passwort**, kein
+Apple-ID-Passwort: appleid.apple.com → *Anmelden und Sicherheit* →
+*App-spezifische Passwörter* → erzeugen. Das Ding lässt sich einzeln
+widerrufen und kann nichts außer Notarisierung.
+
+Der Upstream-Workflow benutzt an dieser Stelle `rcodesign` mit einem
+App-Store-Connect-API-Key. Hier steht stattdessen `xcrun notarytool`: es liegt
+auf dem Runner ohnehin bei, und ein app-spezifisches Passwort ist schneller
+erzeugt und weniger mächtig als ein API-Key mit Developer-Rolle.
+
+Fehlen diese drei, wird signiert aber nicht notarisiert. Gatekeeper zeigt dann
+beim ersten Start eine Warnung — für Kunden am Telefon keine gute Idee.
+
+## Secrets per Kommandozeile setzen
+
+Statt über die Weboberfläche geht es auch so, dann steht der Wert nirgends im
+Browser:
 
 ```bash
-brew install rcodesign
-rcodesign encode-app-store-connect-api-key -o notarize.json <issuer-id> <key-id> AuthKey_<key-id>.p8
-base64 -i notarize.json | pbcopy
+gh secret set MACOS_P12_BASE64        --repo luxio/rustdesk < <(base64 -i DeveloperID.p12)
+gh secret set MACOS_P12_PASSWORD      --repo luxio/rustdesk    # fragt interaktiv
+gh secret set MACOS_NOTARY_PASSWORD   --repo luxio/rustdesk    # fragt interaktiv
+gh secret set MACOS_NOTARY_APPLE_ID   --repo luxio/rustdesk
+gh secret set MACOS_NOTARY_TEAM_ID    --repo luxio/rustdesk
 ```
 
-Die drei Dateien (`.p12`, `.p8`, `notarize.json`) danach sicher ablegen oder
-löschen — sie sind Zugang zu deinem Entwicklerkonto.
+## Sind Secrets in einem öffentlichen Repo sicher?
+
+Ja, mit einer Einschränkung. Workflows aus fremden Forks bekommen die Secrets
+grundsätzlich nicht, und `workflow_dispatch` kann nur auslösen, wer
+Schreibrechte hat. Wer Schreibrechte hat, kann die Werte allerdings über einen
+eigenen Workflow-Schritt auslesen — das bist nur du. Deshalb sind auch alle
+geerbten Upstream-Workflows deaktiviert: würdest du Upstream-Änderungen an
+Workflow-Dateien übernehmen, liefe fremder Code mit Zugriff auf diese Secrets.
 
 ## Bauen
 
